@@ -24,9 +24,9 @@ module SeamlessDatabasePool
           end
           alias_method_chain :redirect_to, :seamless_database_pool
           hide_action :redirect_to_without_seamless_database_pool
-          hide_action :process_action_without_seamless_database_pool
+          hide_action :process_without_seamless_database_pool
           hide_action :redirect_to_with_seamless_database_pool
-          hide_action :process_action_with_seamless_database_pool
+          hide_action :process_with_seamless_database_pool
         end
       end
     end
