@@ -136,6 +136,7 @@ module ActiveRecord
           end
           klass.send :protected, :select
 
+          ActiveRecord::ConnectionAdapters::QueryCache.dirties_query_cache(self, :insert, :update, :delete)
           return klass
         end
 
