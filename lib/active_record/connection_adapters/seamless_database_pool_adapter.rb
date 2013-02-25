@@ -109,6 +109,7 @@ module ActiveRecord
             master_methods.concat(connection_class.public_instance_methods(false))
             master_methods.concat(connection_class.protected_instance_methods(false))
           end
+          master_methods << :add_transaction_record
           master_methods.uniq!
           master_methods -= public_instance_methods(false) + protected_instance_methods(false) + private_instance_methods(false)
           master_methods = master_methods.collect{|m| m.to_sym}
