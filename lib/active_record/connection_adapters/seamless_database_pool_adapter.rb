@@ -38,14 +38,8 @@ module ActiveRecord
           end
         end if config[:read_pool]
 
-        @seamless_database_pool_classes ||= {}
-        klass = @seamless_database_pool_classes[master_connection.class]
-        unless klass
-          klass = ActiveRecord::ConnectionAdapters::SeamlessDatabasePoolAdapter.adapter_class(master_connection)
-          @seamless_database_pool_classes[master_connection.class] = klass
-        end
-
-        return klass.new(nil, logger, master_connection, read_connections, pool_weights)
+        klass = ::ActiveRecord::ConnectionAdapters::SeamlessDatabasePoolAdapter.adapter_class(master_connection)
+        klass.new(nil, logger, master_connection, read_connections, pool_weights)
       end
 
       def establish_adapter(adapter)
@@ -95,6 +89,9 @@ module ActiveRecord
       class << self
         # Create an anonymous class that extends this one and proxies methods to the pool connections.
         def adapter_class(master_connection)
+          adapter_class_name = master_connection.adapter_name.classify
+          return const_get(adapter_class_name) if const_defined?(adapter_class_name, false)
+
           # Define methods to proxy to the appropriate pool
           read_only_methods = [:select_one, :select_all, :select_value, :select_values, :select, :select_rows, :execute, :tables, :columns]
           master_methods = []
@@ -137,6 +134,7 @@ module ActiveRecord
           klass.send :protected, :select
 
           ActiveRecord::ConnectionAdapters::QueryCache.dirties_query_cache(self, :insert, :update, :delete)
+          const_set(adapter_class_name, klass)
           return klass
         end
 
@@ -151,10 +149,10 @@ module ActiveRecord
       end
 
       def initialize(connection, logger, master_connection, read_connections, pool_weights)
-        super(connection, logger)
-
         @master_connection = master_connection
         @read_connections = read_connections.dup.freeze
+
+        super(connection, logger)
 
         @weighted_read_connections = []
         pool_weights.each_pair do |conn, weight|
@@ -215,6 +213,23 @@ module ActiveRecord
         total = 0.0
         do_to_connections {|conn| total += conn.reset_runtime}
         total
+      end
+
+      def lease
+        synchronize do
+          unless @in_use
+            @in_use   = true
+            @last_use = Time.now
+          end
+        end
+      end
+
+      def expire
+        @in_use = false
+      end
+
+      def close
+        pool.checkin self
       end
 
       # Get a random read connection from the pool. If the connection is not active, it will attempt to reconnect
